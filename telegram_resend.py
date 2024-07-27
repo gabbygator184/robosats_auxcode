@@ -87,14 +87,14 @@ time_interval_login = 30
 
 cmd = f"""
 docker exec -t {container_name} psql -U {db_user} -d {db_name} -c \"
-SELECT r.avatar, r.telegram_chat_id, o.id, rt.avatar, o.taker_bond_id
+SELECT user_m.username, r_m.telegram_chat_id, o.id, user_t.username, o.taker_bond_id
 FROM api_order as o
-JOIN api_robot as r ON o.maker_id = r.user_id
+JOIN api_robot as r_m ON o.maker_id = r_m.user_id
 JOIN api_lnpayment as ln ON o.taker_bond_id = ln.payment_hash
-JOIN api_robot as rt ON o.taker_id = rt.user_id
-JOIN auth_user as login ON login.id = r.user_id
-WHERE r.telegram_enabled = {telegram_enabled} AND (o.status = 6 OR o.status = 7 OR o.status = 8)
-AND ln.created_at < NOW() - INTERVAL '{time_interval_created} minutes' AND login.last_login < NOW() - INTERVAL '{time_interval_login} minutes'\"
+JOIN auth_user as user_t ON user_t.id = o.taker_id
+JOIN auth_user as user_m ON user_m.id = o.maker_id
+WHERE r_m.telegram_enabled = {telegram_enabled} AND (o.status = 6 OR o.status = 7 OR o.status = 8)
+AND ln.created_at < NOW() - INTERVAL '{time_interval_created} minutes' AND user_m.last_login < NOW() - INTERVAL '{time_interval_login} minutes'\"
 """
 
 output = exec_cmd(cmd)
@@ -102,19 +102,19 @@ output = exec_cmd(cmd)
 if len(output) > 0:
     now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     send_coord_alert = False
-    
+
     # Header of the message to the coordinator
     msg = '⚠️Message resent⚠️\n'
     msg += 'Robot | chat_id | order_id | Taker\n'
 
-    pattern = r'[/|.]'
+    pattern = r'[|]'
     for line in output:
         line_array = re.split(pattern, line.replace(' ',''))
-        robot = line_array[3]
-        chat_id_robot = line_array[5]
-        order_id = line_array[6]
-        robot_taker = line_array[10]
-        taker_hash = line_array[12]
+        robot = line_array[0]
+        chat_id_robot = line_array[1]
+        order_id = line_array[2]
+        robot_taker = line_array[3]
+        taker_hash = line_array[4]
 
         # Search if it has already sent a message
         is_msg_sent = find_line_in_file(line=f'*{order_id}_{taker_hash}*', file_name=log_tg_file)
